@@ -1,0 +1,14 @@
+version: '2.1'
+
+services:
+  worker:
+    build: .
+    environment:
+      TG_SESSION: 'test_session'
+      TG_PHONE: '+380932875264'
+      TG_API_ID: 186670
+      TG_API_HASH: '3e0aa32b5d4164256fac307100814824'
+      COINS_SECRET: '12345678'
+      COINS_IPN_URL: 'http://web.dev.superorder.io/ipn/telegram'
+    volumes:
+      - .:/app
