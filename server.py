@@ -45,22 +45,18 @@ def index_post():
 
     if CURRENT_STATE == states.STATE_WAIT_CODE:
         form = request.form
-
         try:
             if CLIENT.sign_in(phone=PHONE, code=form['code']):
                 CURRENT_STATE = states.STATE_READY
         except SessionPasswordNeededError:
             CURRENT_STATE = states.STATE_WAIT_PASSWORD
 
-        return redirect('/')
-
     if CURRENT_STATE == states.STATE_WAIT_PASSWORD:
         form = request.form
-
         if CLIENT.sign_in(password=form['password']):
             CURRENT_STATE = states.STATE_READY
 
-        return redirect('/')
+    return redirect('/')
 
 
 def update_handler(update):
