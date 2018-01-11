@@ -1,55 +1,87 @@
-import requests
 from os import environ
-
+from flask import Flask, request, render_template, redirect
 from telethon import TelegramClient
-from telethon.tl.types import UpdateShortMessage
+from telethon.errors import SessionPasswordNeededError
+from requests import post
 
-coins_secret = environ.get('COINS_SECRET', '')
-ipn_url = environ.get('COINS_IPN_URL')
+import states
+import crypto_utils
+
+SESSION_NAME = environ.get('TG_SESSION_NAME')
+API_ID = environ.get('TG_API_ID')
+API_HASH = environ.get('TG_API_HASH')
+PHONE = environ.get('TG_PHONE')
+IPN_URL = environ.get('TG_IPN_URL')
+IPN_SECRET = environ.get('TG_IPN_SECRET')
+
+APP = Flask(__name__)
+CLIENT = TelegramClient(SESSION_NAME, API_ID, API_HASH,
+                        proxy=None, update_workers=4)
+
+CURRENT_STATE = states.STATE_INIT
+
+
+@APP.route('/', methods=['GET'])
+def index():
+    global CURRENT_STATE
+
+    templates = {
+        states.STATE_WAIT_CODE: 'wait_code.html',
+        states.STATE_WAIT_PASSWORD: 'wait_password.html',
+        states.STATE_READY: 'ready.html',
+    }
+
+    if CURRENT_STATE in templates:
+        return render_template(templates[CURRENT_STATE])
+
+    return render_template('init.html')
+
+
+@APP.route('/', methods=['POST'])
+def index_post():
+    global CURRENT_STATE, CLIENT
+
+    if CURRENT_STATE == states.STATE_WAIT_CODE:
+        form = request.form
+
+        try:
+            if CLIENT.sign_in(phone=PHONE, code=form['code']):
+                CURRENT_STATE = states.STATE_READY
+        except SessionPasswordNeededError:
+            CURRENT_STATE = states.STATE_WAIT_PASSWORD
+
+        return redirect('/')
+
+    if CURRENT_STATE == states.STATE_WAIT_PASSWORD:
+        form = request.form
+
+        if CLIENT.sign_in(password=form['password']):
+            CURRENT_STATE = states.STATE_READY
+
+        return redirect('/')
 
 
 def update_handler(update):
     try:
-        if (hasattr(update, 'message')):
-            response = requests.post(
-                ipn_url, data={'message': update.message, 'sign': '123'})
+        if hasattr(update, 'message'):
+            print(update)
+            data = {'message': update.message}
+            hmac = crypto_utils.sign(IPN_SECRET, data)
+            response = post(IPN_URL, data=data, headers={"hmac": hmac})
             if response.status_code != 200:
                 print("Computer says: NO")
+    except Exception as exception:
+        print(exception)
 
-    except Exception as e:
-        print(e)
 
+if __name__ == "__main__":
+    CLIENT.connect()
+    CLIENT.add_update_handler(update_handler)
 
-if __name__ == '__main__':
-    session_name = environ.get('TG_SESSION')
-    user_phone = environ.get('TG_PHONE')
-    client = TelegramClient(
-        session_name, int(environ.get('TG_API_ID')
-                          ), environ.get('TG_API_HASH'),
-        proxy=None, update_workers=4
-    )
-    try:
-        print('INFO: Connecting to Telegram Servers...', end='', flush=True)
-        client.connect()
-        print('Done!')
+    if not CLIENT.is_user_authorized():
+        CLIENT.send_code_request(phone=PHONE)
+        CURRENT_STATE = states.STATE_WAIT_CODE
+    else:
+        CURRENT_STATE = states.STATE_READY
 
-        if not client.is_user_authorized():
-            print('INFO: Unauthorized user')
-            client.send_code_request(user_phone)
-            code_ok = False
-            while not code_ok:
-                code = input('Enter the auth code: ')
-                try:
-                    code_ok = client.sign_in(user_phone, code)
-                except SessionPasswordNeededError:
-                    password = getpass('Two step verification enabled. '
-                                       'Please enter your password: ')
-                    code_ok = client.sign_in(password=password)
-        print('INFO: Client initialized successfully!')
-
-        client.add_update_handler(update_handler)
-        input('Press Enter to stop this!\n')
-    except KeyboardInterrupt:
-        pass
-    finally:
-        client.disconnect()
+    APP.run()
