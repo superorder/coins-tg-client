@@ -1,8 +1,10 @@
 from os import environ
 from flask import Flask, request, render_template, redirect
 from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from requests import post
+import time
+import logging
 
 import states
 import crypto_utils
@@ -75,13 +77,23 @@ def update_handler(update):
 
 
 if __name__ == "__main__":
-    CLIENT.connect()
+    logging.info("Connecting telegram client...")
+    try:
+        CLIENT.connect()
+    except FloodWaitError as exception:
+        logging.error(
+            'Flood error occured. Waiting %d seconds...', exception.seconds)
+        time.sleep(exception.seconds)
+
     CLIENT.add_update_handler(update_handler)
 
     if not CLIENT.is_user_authorized():
+        logging.info('Current session is not authenticated. Need code.')
         CLIENT.send_code_request(phone=PHONE)
         CURRENT_STATE = states.STATE_WAIT_CODE
     else:
+        logging.info('Successfully connected')
         CURRENT_STATE = states.STATE_READY
 
+    logging.info('Staring web server...')
     APP.run()
