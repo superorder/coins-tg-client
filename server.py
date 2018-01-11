@@ -75,21 +75,23 @@ def update_handler(update):
     except Exception as exception:
         print(exception)
 
-
-if __name__ == "__main__":
-    logging.info("Connecting telegram client...")
+def send_code(client):
     try:
-        CLIENT.connect()
+        client.send_code_request(phone=PHONE)
     except FloodWaitError as exception:
         logging.error(
             'Flood error occured. Waiting %d seconds...', exception.seconds)
         time.sleep(exception.seconds)
+        send_code(client)
 
+if __name__ == "__main__":
+    logging.info("Connecting telegram client...")
+    CLIENT.connect()
     CLIENT.add_update_handler(update_handler)
 
     if not CLIENT.is_user_authorized():
         logging.info('Current session is not authenticated. Need code.')
-        CLIENT.send_code_request(phone=PHONE)
+        send_code(CLIENT)
         CURRENT_STATE = states.STATE_WAIT_CODE
     else:
         logging.info('Successfully connected')
