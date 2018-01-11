@@ -4,6 +4,6 @@ RUN pip install telethon requests flask
 
 WORKDIR /app
 
-COPY server.py .
+COPY . .
 
 CMD [ "python", "server.py" ]
