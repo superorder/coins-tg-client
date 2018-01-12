@@ -1,8 +1,10 @@
-import hmac
-import hashlib
-import json
+from hmac import new
+from hashlib import sha512
+from json import dumps
 
 
 def sign(key, message):
-    dig = hmac.new(key, json.dumps(message), digestmod=hashlib.sha256)
-    return dig.digest()
+    key_bytes = key.encode()
+    message_bytes = dumps(message).encode()
+    dig = new(key_bytes, message_bytes, digestmod=sha512)
+    return dig.hexdigest()

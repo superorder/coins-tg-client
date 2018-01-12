@@ -2,12 +2,16 @@ from os import environ
 from flask import Flask, request, render_template, redirect
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
-from requests import post
 import time
 import threading
 
+from logging_utils import get_module_logger
+from notify import notify
+from telegram import handle_message
+
 import states
-import crypto_utils
+
+logger = get_module_logger(__name__)
 
 SESSION_NAME = environ.get('TG_SESSION_NAME')
 API_ID = environ.get('TG_API_ID')
@@ -25,13 +29,11 @@ CURRENT_STATE = states.STATE_INIT
 
 @APP.route('/', methods=['GET'])
 def index():
-    global CURRENT_STATE
-
     templates = {
         states.STATE_WAIT_CODE: 'wait_code.html',
         states.STATE_WAIT_PASSWORD: 'wait_password.html',
         states.STATE_READY: 'ready.html',
-        states.STATE_WAIT_CODE: 'wait.html',
+        states.STATE_WAIT_SECONDS: 'wait.html',
     }
 
     if CURRENT_STATE in templates:
@@ -42,75 +44,64 @@ def index():
 
 @APP.route('/', methods=['POST'])
 def index_post():
-    global CURRENT_STATE, CLIENT
+    global CURRENT_STATE
+
+    logger.info('Got POST message')
 
     if CURRENT_STATE == states.STATE_WAIT_CODE:
         form = request.form
         try:
+            logger.info('Signing with code %s...', form['code'])
             if CLIENT.sign_in(phone=PHONE, code=form['code']):
+                logger.info("OK")
                 CURRENT_STATE = states.STATE_READY
         except SessionPasswordNeededError:
+            logger.info('Password needed')
             CURRENT_STATE = states.STATE_WAIT_PASSWORD
 
     if CURRENT_STATE == states.STATE_WAIT_PASSWORD:
         form = request.form
+        logger.info('Signing with password...')
         if CLIENT.sign_in(password=form['password']):
+            logger.info("OK")
             CURRENT_STATE = states.STATE_READY
 
     return redirect('/')
 
 
-def update_handler(update):
+def send_code():
     try:
-        if hasattr(update, 'message'):
-            print(update)
-            data = {'message': update.message}
-            hmac = crypto_utils.sign(IPN_SECRET, data)
-            response = post(IPN_URL, data=data, headers={"hmac": hmac})
-            if response.status_code != 200:
-                print("Computer says: NO")
-    except Exception as exception:
-        print(exception)
-
-
-def send_code(client):
-    global CURRENT_STATE
-
-    try:
-        client.send_code_request(phone=PHONE)
+        logger.info("Sending code to %s...", PHONE)
+        CLIENT.send_code_request(phone=PHONE)
     except FloodWaitError as exception:
-        CURRENT_STATE = states.STATE_WAIT_CODE
-        print(
-            "Flood error occured. Waiting %d seconds..." % (exception.seconds,))
+        logger.info(
+            "Flood error occured. Waiting %d seconds...", exception.seconds)
         time.sleep(exception.seconds)
-        send_code(client)
+        send_code()
 
 
 def start_server():
-    print("Staring web server...")
+    logger.info("Staring web server...")
     APP.run(host="0.0.0.0")
 
 
-def connect_client(client):
+def connect_client():
     global CURRENT_STATE
 
-    print("Connecting telegram client...")
-    client.connect()
-    client.add_update_handler(update_handler)
+    logger.info("Connecting telegram client...")
+    CLIENT.connect()
+    CLIENT.add_update_handler(handle_message)
 
-    if not client.is_user_authorized():
-        print("Current session is not authenticated. Need code.")
-        send_code(client)
+    if not CLIENT.is_user_authorized():
+        logger.info("Current session is not authenticated. Need code.")
         CURRENT_STATE = states.STATE_WAIT_CODE
+        send_code()
     else:
-        print("Successfully connected")
+        logger.info("Successfully connected")
         CURRENT_STATE = states.STATE_READY
 
 
 if __name__ == "__main__":
-    t = threading.Thread(target=start_server)
-    t.start()
-
-    connect_client(CLIENT)
-
-    t.join()
+    logger.info("Starting everything...")
+    threading.Thread(target=start_server).start()
+    threading.Thread(target=connect_client).start()

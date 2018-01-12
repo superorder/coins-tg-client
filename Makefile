@@ -4,4 +4,4 @@ build:
 		docker build -t ${IMAGE_NAME} .
 
 up:
-		docker run -it --env-file=.env --rm -p5000:5000 -v"$(CURDIR)":/app ${IMAGE_NAME}
+		docker run --env-file=.env --rm -p5000:5000 -v"$(CURDIR)":/app ${IMAGE_NAME}
