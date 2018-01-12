@@ -75,10 +75,13 @@ def index_post():
 
 
 def send_code():
+    global CURRENT_STATE
+
     try:
         logger.info("Sending code to %s...", PHONE)
         CLIENT.send_code_request(PHONE)
     except FloodWaitError as exception:
+        CURRENT_STATE = states.STATE_WAIT_SECONDS
         logger.info(
             "Flood error occured. Waiting %d seconds...", exception.seconds)
         time.sleep(exception.seconds)
