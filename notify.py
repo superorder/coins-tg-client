@@ -19,7 +19,7 @@ def notify(message, sender):
     logger.info("Going to send notification: %s (hmac: %s)", str(data), hmac)
 
     try:
-      response = post(IPN_URL, data=data, headers={'hmac': hmac})
+      response = post(IPN_URL, json=data, headers={'hmac': hmac})
       logger.info("Response: %d", response.status_code)
 
     except Exception as exception:
