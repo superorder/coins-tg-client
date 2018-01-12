@@ -9,3 +9,5 @@ COPY . .
 CMD [ "python", "server.py" ]
 
 VOLUME [ "/tmp" ]
+
+EXPOSE 5000
