@@ -27,6 +27,11 @@ CLIENT = TelegramClient(SESSION_NAME, API_ID, API_HASH,
 CURRENT_STATE = states.STATE_INIT
 
 
+@APP.errorhandler(Exception)
+def handle_invalid_usage(exception):
+    return str(exception), 500
+
+
 @APP.route('/', methods=['GET'])
 def index():
     templates = {
@@ -52,7 +57,7 @@ def index_post():
         form = request.form
         try:
             logger.info('Signing with code %s...', form['code'])
-            if CLIENT.sign_in(phone=PHONE, code=form['code']):
+            if CLIENT.sign_in(PHONE, form['code']):
                 logger.info("OK")
                 CURRENT_STATE = states.STATE_READY
         except SessionPasswordNeededError:
@@ -72,7 +77,7 @@ def index_post():
 def send_code():
     try:
         logger.info("Sending code to %s...", PHONE)
-        CLIENT.send_code_request(phone=PHONE)
+        CLIENT.send_code_request(PHONE)
     except FloodWaitError as exception:
         logger.info(
             "Flood error occured. Waiting %d seconds...", exception.seconds)
