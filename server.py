@@ -4,7 +4,7 @@ from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError, FloodWaitError
 from requests import post
 import time
-import logging
+import threading
 
 import states
 import crypto_utils
@@ -31,6 +31,7 @@ def index():
         states.STATE_WAIT_CODE: 'wait_code.html',
         states.STATE_WAIT_PASSWORD: 'wait_password.html',
         states.STATE_READY: 'ready.html',
+        states.STATE_WAIT_CODE: 'wait.html',
     }
 
     if CURRENT_STATE in templates:
@@ -71,27 +72,45 @@ def update_handler(update):
     except Exception as exception:
         print(exception)
 
+
 def send_code(client):
+    global CURRENT_STATE
+
     try:
         client.send_code_request(phone=PHONE)
     except FloodWaitError as exception:
-        logging.error(
-            'Flood error occured. Waiting %d seconds...', exception.seconds)
+        CURRENT_STATE = states.STATE_WAIT_CODE
+        print(
+            "Flood error occured. Waiting %d seconds..." % (exception.seconds,))
         time.sleep(exception.seconds)
         send_code(client)
 
-if __name__ == "__main__":
-    logging.info("Connecting telegram client...")
-    CLIENT.connect()
-    CLIENT.add_update_handler(update_handler)
 
-    if not CLIENT.is_user_authorized():
-        logging.info('Current session is not authenticated. Need code.')
-        send_code(CLIENT)
+def start_server():
+    print("Staring web server...")
+    APP.run(host="0.0.0.0")
+
+
+def connect_client(client):
+    global CURRENT_STATE
+
+    print("Connecting telegram client...")
+    client.connect()
+    client.add_update_handler(update_handler)
+
+    if not client.is_user_authorized():
+        print("Current session is not authenticated. Need code.")
+        send_code(client)
         CURRENT_STATE = states.STATE_WAIT_CODE
     else:
-        logging.info('Successfully connected')
+        print("Successfully connected")
         CURRENT_STATE = states.STATE_READY
 
-    logging.info('Staring web server...')
-    APP.run()
+
+if __name__ == "__main__":
+    t = threading.Thread(target=start_server)
+    t.start()
+
+    connect_client(CLIENT)
+
+    t.join()
