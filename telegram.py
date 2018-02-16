@@ -1,4 +1,4 @@
-from telethon.tl.types import UpdateShortMessage
+from telethon.tl.types import UpdateShortMessage, UpdateNewChannelMessage
 
 from logging_utils import get_module_logger
 from notify import notify
@@ -11,3 +11,8 @@ def handle_message(update):
 
     if isinstance(update, UpdateShortMessage):
         notify(update.message, update.user_id)
+
+    if isinstance(update, UpdateNewChannelMessage):
+        channel_id = update.message.to_id.channel_id
+        message = update.message.message
+        notify(message, channel_id)
