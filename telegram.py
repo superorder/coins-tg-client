@@ -1,4 +1,4 @@
-from telethon.tl.types import UpdateShortMessage, UpdateNewChannelMessage
+from telethon.tl.types import UpdateShortMessage, UpdateNewChannelMessage, MessageMediaPhoto
 
 from logging_utils import get_module_logger
 from notify import notify
@@ -16,3 +16,7 @@ def handle_message(update):
         channel_id = update.message.to_id.channel_id
         message = update.message.message
         notify(message, channel_id)
+
+        if isinstance(update.message.media, MessageMediaPhoto):
+            message = update.message.media.caption
+            notify(message, channel_id)
